@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyundai Style Digital Dashboard</title>
+    <!-- <link rel="stylesheet" type="text/css" href="headdesign.css" /> -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            width: 1000px;
+            height: 400px;
+            background-color: #000;
+            margin: 50px auto;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .gauge {
+            width: 300px;
+            height: 300px;
+        }
+
+        .center-display {
+            width: 300px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .fuel-container {
+            position: relative;
+            width: 100%;
+            height: 30px;
+            margin-top: 10px;
+        }
+
+        .fuel-icon {
+            position: absolute;
+            left: -30px;
+            top: -5px;
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+        }
+
+        .fuel-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .fuel-level {
+            width: 70%;
+            height: 100%;
+            background-color: transparent;
+            /* 초기 상태는 투명 */
+            transition: background-color 0.3s;
+            /* 부드러운 색상 전환을 위한 트랜지션 */
+        }
+
+        .fuel-marker {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 10px;
+            background-color: #fff;
+        }
+
+        .fuel-marker.large {
+            height: 15px;
+            top: -2.5px;
+        }
+
+        #canvas {
+            border-radius: 10px;
+        }
+
+        .turn-signal {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 30px solid #333;
+            position: absolute;
+            top: 20px;
+        }
+
+        .turn-signal.left {
+            left: 300px;
+            transform: rotate(-90deg);
+        }
+
+        .turn-signal.right {
+            right: 300px;
+            transform: rotate(90deg);
+        }
+
+        .turn-signal.active {
+            border-bottom-color: #0f0;
+        }
+
+        .turn-signal-buttons {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .turn-signal-button {
+            width: 40px;
+            height: 40px;
+            background-color: #333;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .turn-signal-button:hover {
+            background-color: #444;
+        }
+
+        .info-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .nav-button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .nav-button:hover {
+            color: #0af;
+        }
+
+        /* 시동버튼 */
+        .start-button {
+            position: absolute;
+            left: 10px;
+            bottom: 50px;
+            width: 60px;
+            height: 60px;
+            background-color: #333;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+
+        .start-button:hover {
+            background-color: #444;
+        }
+
+        .start-button.active {
+            background-color: #0f0;
+        }
+
+        .register-button {
+            position: absolute;
+            left: 265px;
+            bottom: 50px;
+            /* START 버튼보다 위에 위치 */
+            width: 60px;
+            height: 60px;
+            background-color: #333;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+
+        .register-button:hover {
+            background-color: #444;
+        }
+
+        .register-button.active {
+            background-color: #f00;
+            /* 활성화 시 빨간색으로 변경 */
+        }
+
+        #frameElement {
+            display: none;
+        }
+        #frameElement2 {
+            display: none;
+        }
+        
+    </style>
+</head>
+
+<body>
+    <div class="dashboard">
+        <div class="turn-signal left"></div>
+        <div class="turn-signal right"></div>
+        <svg class="gauge" id="tachometer" viewBox="0 0 100 100">
+            <!-- Tachometer will be drawn here -->
+        </svg>
+        <div class="center-display">
+            <div class="info-bar">
+                <span>주행가능거리 639km</span>
+                <span>25°C</span>
+            </div>
+            <canvas id="canvas" width="300" height="200"></canvas>
+            <img id="frameElement" crossorigin="anonymous">
+            <img id="frameElement2" crossorigin="anonymous">
+            <div class="info-navigation">
+                <button class="nav-button" id="prev-info">←</button>
+                <span id="info-title">주행정보</span>
+                <button class="nav-button" id="next-info">→</button>
+            </div>
+            <div class="fuel-container">
+                <img src="/static/fuel_icon3.png" alt="Fuel Icon" class="fuel-icon">
+                <div class="fuel-bar">
+                    <div class="fuel-level" id="fuelLevelIndicator"></div>
+                    <div class="fuel-marker large" style="left: 0%"></div>
+                    <div class="fuel-marker" style="left: 25%"></div>
+                    <div class="fuel-marker large" style="left: 50%"></div>
+                    <div class="fuel-marker" style="left: 75%"></div>
+                    <div class="fuel-marker large" style="left: 100%"></div>
+                </div>
+            </div>
+        </div>
+        <svg class="gauge" id="speedometer" viewBox="0 0 100 100">
+            <!-- Speedometer will be drawn here -->
+        </svg>
+        <div class="turn-signal-buttons">
+            <button class="turn-signal-button" id="left-signal">←</button>
+            <button class="turn-signal-button" id="right-signal">→</button>
+        </div>
+
+        <!-- 시동버튼 -->
+        <button class="start-button" id="startButton">START</button>
+        <button class="register-button" id="registerButton">REGI</button>
+    </div>
+
+    <!-- <script src="headscript.js"></script> -->
+    <script>
+        //////////////////// 메인 클러스터 그리기
+        function drawGauge(id, value, max, color, unit) {
+            const svg = document.getElementById(id);
+            svg.innerHTML = ''; // Clear previous content
+
+            // Background circle
+            const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            bgCircle.setAttribute('cx', '50');
+            bgCircle.setAttribute('cy', '50');
+            bgCircle.setAttribute('r', '45');
+            bgCircle.setAttribute('fill', 'none');
+            bgCircle.setAttribute('stroke', '#222');
+            bgCircle.setAttribute('stroke-width', '10');
+            svg.appendChild(bgCircle);
+
+            // Value arc
+            const valueArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const startAngle = -220; // 7 o'clock position
+            const endAngle = 45; // 5 o'clock position
+            const angle = startAngle + (value / max) * (endAngle - startAngle);
+            const startX = 50 + 45 * Math.cos(startAngle * Math.PI / 180);
+            const startY = 50 + 45 * Math.sin(startAngle * Math.PI / 180);
+            const endX = 50 + 45 * Math.cos(angle * Math.PI / 180);
+            const endY = 50 + 45 * Math.sin(angle * Math.PI / 180);
+            const largeArcFlag = angle - startAngle <= 180 ? 0 : 1;
+            valueArc.setAttribute('d', `M${startX},${startY} A45,45 0 ${largeArcFlag},1 ${endX},${endY}`);
+            valueArc.setAttribute('fill', 'none');
+            valueArc.setAttribute('stroke', color);
+            valueArc.setAttribute('stroke-width', '10');
+            valueArc.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(valueArc);
+
+            // Value text
+            const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            valueText.setAttribute('x', '50');
+            valueText.setAttribute('y', '60');
+            valueText.setAttribute('text-anchor', 'middle');
+            valueText.setAttribute('font-size', '20');
+            valueText.setAttribute('fill', '#fff');
+            valueText.textContent = Math.round(value);
+            svg.appendChild(valueText);
+
+            // Unit text
+            const unitText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            unitText.setAttribute('x', '50');
+            unitText.setAttribute('y', '75');
+            unitText.setAttribute('text-anchor', 'middle');
+            unitText.setAttribute('font-size', '10');
+            unitText.setAttribute('fill', '#999');
+            unitText.textContent = unit;
+            svg.appendChild(unitText);
+
+            // Add tick marks
+            for (let i = 0; i <= max; i += max / 10) {
+                const tickAngle = startAngle + (i / max) * (endAngle - startAngle);
+                const innerX = 50 + 40 * Math.cos(tickAngle * Math.PI / 180);
+                const innerY = 50 + 40 * Math.sin(tickAngle * Math.PI / 180);
+                const outerX = 50 + 45 * Math.cos(tickAngle * Math.PI / 180);
+                const outerY = 50 + 45 * Math.sin(tickAngle * Math.PI / 180);
+
+                const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                tick.setAttribute('x1', innerX);
+                tick.setAttribute('y1', innerY);
+                tick.setAttribute('x2', outerX);
+                tick.setAttribute('y2', outerY);
+                tick.setAttribute('stroke', '#666');
+                tick.setAttribute('stroke-width', '1');
+                svg.appendChild(tick);
+
+                if (i % (max / 5) === 0) {
+                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    const labelX = 50 + 35 * Math.cos(tickAngle * Math.PI / 180);
+                    const labelY = 50 + 35 * Math.sin(tickAngle * Math.PI / 180);
+                    label.setAttribute('x', labelX);
+                    label.setAttribute('y', labelY);
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('font-size', '8');
+                    label.setAttribute('fill', '#999');
+                    label.textContent = i;
+                    svg.appendChild(label);
+                }
+            }
+        }
+
+        /////////////// 클러스터 정보 계기판
+        let currentInfoIndex = 0;
+        const infoTypes = ['주행정보', '연비', '그래프'];
+        function updateInfoDisplay() {
+            document.getElementById('info-title').textContent = infoTypes[currentInfoIndex];
+            drawCenterDisplay();
+        }
+        document.getElementById('prev-info').addEventListener('click', () => {
+            currentInfoIndex = (currentInfoIndex - 1 + infoTypes.length) % infoTypes.length;
+            updateInfoDisplay();
+        });
+        document.getElementById('next-info').addEventListener('click', () => {
+            currentInfoIndex = (currentInfoIndex + 1) % infoTypes.length;
+            updateInfoDisplay();
+        });
+
+        //////////////////// Turn signal functionality
+        let leftSignalInterval, rightSignalInterval;
+
+        function toggleTurnSignal(side) {
+            const signal = document.querySelector(`.turn-signal.${side}`);
+            const otherSignal = document.querySelector(`.turn-signal.${side === 'left' ? 'right' : 'left'}`);
+            const intervalVar = side === 'left' ? 'leftSignalInterval' : 'rightSignalInterval';
+
+            if (signal.classList.contains('active')) {
+                signal.classList.remove('active');
+                clearInterval(window[intervalVar]);
+                window[intervalVar] = null;
+            } else {
+                otherSignal.classList.remove('active');
+                clearInterval(window[side === 'left' ? 'rightSignalInterval' : 'leftSignalInterval']);
+                window[side === 'left' ? 'rightSignalInterval' : 'leftSignalInterval'] = null;
+
+                signal.classList.add('active');
+                window[intervalVar] = setInterval(() => {
+                    signal.classList.toggle('active');
+                }, 500);
+            }
+        }
+        //////////////////////////////// 등록과정
+        let ws = null;
+        let isCapturing = false;
+        let isRecognitionMode = false;
+        let buildingStarted = false;
+        let progressElement = document.getElementById('registrationProgress');
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                console.log('WebSocket 연결이 설정되었습니다.');
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket 연결이 종료되었습니다. 재연결 시도...');
+                setTimeout(connectWebSocket, 1000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket 에러:', error);
+            };
+
+            ws.onmessage = (event) => {
+                const response = JSON.parse(event.data);
+                console.log('서버 응답:', response);
+
+                switch (response.type) {
+                    case 'start':
+                        buildingStarted = true;
+                        document.getElementById('registerButton').classList.add('active');
+                        break;
+                    case 'stop':
+                        buildingStarted = false;
+                        document.getElementById('registerButton').classList.remove('active');
+                        break;
+                    case 'image':
+                        if (response.image) {
+                            const img = new Image();
+                            img.onload = function () {
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            };
+                            img.src = response.image;
+                        }
+                        if (response.count) {
+                            updateProgress(response.count);
+                        }
+                        break;
+                    case 'complete':
+                        isCapturing = false;
+                        stopCamera2();
+
+                        // 진행률 표시를 완료 메시지로 변경
+                        let progressElement = document.getElementById('registrationProgress');
+                        if (progressElement) {
+                            progressElement.textContent = '등록이 완료되었습니다';
+                            // 스타일 업데이트 (선택사항: 완료 메시지의 스타일을 다르게 하고 싶을 경우)
+                            progressElement.style.backgroundColor = 'rgba(0, 255, 0, 0.7)'; // 초록색 배경으로 변경
+                            progressElement.style.padding = '8px 15px'; // 패딩 약간 증가
+                            progressElement.style.fontSize = '16px'; // 글자 크기 약간 증가
+                        }
+
+                        // 2초 후에 초기화
+                        setTimeout(() => {
+                            if (progressElement) {
+                                progressElement.remove();
+                            }
+                            stopEngine();
+                        }, 4000);
+                        break;
+
+                    case 'recognition_result':
+                        isCapturing = false;
+                        isRecognitionMode = false;
+                        isRecognitionComplete = true;
+                        stopCamera2();
+
+                }
+            };
+        }
+
+        async function startCamera() {
+            console.log("카메라 켜짐");
+            const frameElement2 = document.getElementById('frameElement2');
+            const streamUrl = "http://192.168.1.101:5000/video_feed"; // 카메라 스트림 URL
+            try {
+                frameElement2.src = streamUrl;
+                isCapturing = true;
+                sendFrames();
+                console.log("카메라 스트림 2 재생 중...");
+            } catch (err) {
+                console.error("카메라 스트림 2 요청 실패:", err);
+                alert("카메라 스트림 2 연결에 실패했습니다.");
+            }
+        }
+
+        function stopCamera2() {
+            isCapturing = false;
+            const frameElement2 = document.getElementById('frameElement2');
+            frameElement2.src = null;
+            console.log("카메라 스트림 중지됨");
+        }
+
+        function drawRegisterComplete() {
+            ctx.drawImage(frameElement2, 0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('등록이 완료되었습니다', canvas.width / 2, canvas.height / 2);
+        }
+
+        function sendFrames() {
+            if (!ws) return;
+            const frameElement2 = document.getElementById('frameElement2');
+            if (!frameElement2.src || frameElement2.src === "") {
+                console.error("이미지 소스가 없습니다.");
+                return;
+            }
+            const wsCanvas = document.createElement('canvas');
+            wsCanvas.width = frameElement2.naturalWidth || 640;
+            wsCanvas.height = frameElement2.naturalHeight || 480;
+            const wsCtx = wsCanvas.getContext('2d');
+
+            wsCtx.drawImage(frameElement2, 0, 0, wsCanvas.width, wsCanvas.height);
+            const imageData = wsCanvas.toDataURL('image/jpeg', 0.8);
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // 인식 모드일 때는 'recognize' 접두어 추가
+                if (isRecognitionMode) {
+                    ws.send('recognize' + imageData);
+                } else {
+                    ws.send(imageData);
+                }
+            }
+            if (isCapturing || isRecognitionMode) {
+                setTimeout(sendFrames, 100);
+            }
+        }
+
+        function updateProgress(count) {
+            let progressElement = document.getElementById('registrationProgress');
+            if (!progressElement) {
+                const centerDisplay = document.querySelector('.center-display');
+                progressElement = document.createElement('div');  // let으로 선언된 변수 재할당
+                progressElement.id = 'registrationProgress';
+                progressElement.style.position = 'absolute';
+                progressElement.style.top = '240px';
+                progressElement.style.left = '50%';
+                progressElement.style.transform = 'translateX(-50%)';
+                progressElement.style.color = '#fff';
+                progressElement.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                progressElement.style.padding = '5px 10px';
+                progressElement.style.borderRadius = '5px';
+                progressElement.style.zIndex = '1000';
+                centerDisplay.appendChild(progressElement);
+            }
+            progressElement.textContent = `촬영 진행률: ${count}/100`;
+        }
+
+        /////// Register 버튼 이벤트 리스너
+        document.getElementById('registerButton').addEventListener('click', function () {
+            if (!isCapturing) {
+                isRecognitionMode = false;
+                startCamera();
+            } else {
+                stopCamera2();
+            }
+        });
+
+        // 페이지 로드 시 WebSocket 연결
+        connectWebSocket();
+        /////////////////////////////////
+
+        document.getElementById('left-signal').addEventListener('click', () => toggleTurnSignal('left'));
+        document.getElementById('right-signal').addEventListener('click', () => toggleTurnSignal('right'));
+
+        //////////// 시동버튼
+        const startButton = document.getElementById('startButton');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const frameElement = document.getElementById('frameElement');
+        let engineStarted = false;
+        let recognitionState = 'idle'; // 'idle', 'recognizing', 'recognized'
+        let animationFrameId;
+        let stream;
+        let countdown;
+        const fuelLevelIndicator = document.getElementById('fuelLevelIndicator');
+        let isDashboardActive = false;
+
+        function initializeCanvas() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            fuelLevelIndicator.style.backgroundColor = 'transparent';
+        }
+
+        startButton.addEventListener('click', () => {
+            if (!isCapturing && !engineStarted) {
+                isRecognitionMode = true;
+                startRecognitionProcess();
+                startCamera();
+            } else {
+                stopEngine();
+            }
+        });
+
+        /*function drawInitialState() {
+            initializeCanvas();
+            drawGauge('tachometer', 0, 8, '#f60', 'x1000rpm');
+            drawGauge('speedometer', 0, 260, '#0af', 'km/h');
+        }*/
+
+        // 그냥 카메라켜서 계속 보여줌
+        async function startRecognitionProcess() {
+            startButton.disabled = true;
+            recognitionState = 'recognizing';
+            countdown = 6;
+            recognitionStartTime = Date.now();
+
+            const frameElement = document.getElementById('frameElement');
+            const streamUrl = "http://192.168.1.101:5000/video_feed";
+
+            try {
+                frameElement.src = streamUrl;
+                console.log("카메라 스트림 1 재생 중...");
+                animateRecognition();
+            } catch (err) {
+                console.error("카메라 스트림 1 요청 실패:", err);
+                alert("카메라 스트림 1 요청에 실패했습니다.");
+                startButton.disabled = false;
+                recognitionState = 'idle';
+            }
+        }
+
+        let isRecognitionComplete = false;
+        function animateRecognition() {
+            if (!isRecognitionComplete) {
+                // 타이머 제거하고 계속 카메라 켜두기
+                drawVideoToCanvas();
+                requestAnimationFrame(animateRecognition);
+            } else {
+                // 인식 완료 메시지 2초간 표시 후 대시보드로 전환
+                drawRecognitionComplete();
+                setTimeout(() => {
+                    engineStarted = true;
+                    startButton.textContent = 'STOP';
+                    startButton.classList.add('active');
+                    startButton.disabled = false;
+                    stopCamera();
+                    drawDashboard();
+                }, 2000);
+            }
+        }
+
+        function drawVideoToCanvas() {
+            ctx.drawImage(frameElement, 0, 0, canvas.width, canvas.height);
+
+            // 카운트다운 표시
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`인식 중...`, canvas.width / 2, canvas.height - 20);
+
+            drawRecognitionSimulation();
+        }
+
+        function drawRecognitionSimulation() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(canvas.width, canvas.height) / 4;
+
+            ctx.strokeStyle = '#0af';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const angle = (Date.now() / 1000) % (Math.PI * 2);
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius);
+            ctx.stroke();
+        }
+
+
+        function drawRecognitionComplete() {
+            ctx.drawImage(frameElement, 0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('인식이 완료되었습니다', canvas.width / 2, canvas.height / 2);
+        }
+
+        function stopCamera() {
+            const frameElement = document.getElementById('frameElement');
+            frameElement.pause();
+            frameElement.src = null;
+        }
+
+        function stopEngine() {
+            engineStarted = false;
+            isCapturing = false;
+            isRecognitionComplete = false;
+            isRecognitionMode = false;
+            recognitionState = 'idle';
+            startButton.textContent = 'START';
+            startButton.classList.remove('active');
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            stopCamera();
+            initializeCanvas();
+            drawGauge('tachometer', 0, 8, '#f60', 'x1000rpm');
+            drawGauge('speedometer', 0, 260, '#0af', 'km/h');
+            currentInfoIndex = 0;
+            document.getElementById('info-title').textContent = infoTypes[currentInfoIndex];
+        }
+
+        let currentInfoIndex2 = 0;
+        const infoTypes2 = ['주행정보', '연비', '그래프'];
+
+        function drawDashboard() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            fuelLevelIndicator.style.backgroundColor = '#0f0';
+            switch (currentInfoIndex2) {
+                case 0: // 주행정보
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('주행 시간: 2시간 30분', 10, 80);
+                    ctx.fillText('주행 거리: 180 km', 10, 110);
+                    ctx.fillText('평균 속도: 72 km/h', 10, 140);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('COMFORT', 10, 20);
+
+                    ctx.fillStyle = '#666';
+                    ctx.fillRect(10, 40, 280, 20);
+                    ctx.fillStyle = '#0f0';
+                    ctx.fillRect(10, 40, 70, 20);
+                    break;
+                case 1: // 연비
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('평균 연비: 12.5 km/L', 10, 80);
+                    ctx.fillText('순간 연비: 14.2 km/L', 10, 110);
+                    ctx.fillText('남은 연료: 45 L', 10, 140);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('COMFORT', 10, 20);
+
+                    ctx.fillStyle = '#666';
+                    ctx.fillRect(10, 40, 280, 20);
+                    ctx.fillStyle = '#0f0';
+                    ctx.fillRect(10, 40, 70, 20);
+                    break;
+                case 2: // 그래프
+                    ctx.strokeStyle = '#0af';
+                    ctx.beginPath();
+                    ctx.moveTo(10, 180);
+                    ctx.lineTo(290, 20);
+                    ctx.stroke();
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('연비 추이', 10, 30);
+                    ctx.fillText('0', 10, 190);
+                    ctx.fillText('100', 270, 190);
+                    break;
+            }
+
+            if (engineStarted) {
+                animationFrameId = requestAnimationFrame(drawDashboard);
+            }
+        }
+
+        function updateInfoDisplay() {
+            document.getElementById('info-title').textContent = infoTypes2[currentInfoIndex2];
+            drawCenterDisplay();
+        }
+
+        document.getElementById('prev-info').addEventListener('click', () => {
+            if (engineStarted) {
+                currentInfoIndex2 = (currentInfoIndex2 - 1 + infoTypes2.length) % infoTypes2.length;
+                updateInfoDisplay();
+            }
+        });
+
+        document.getElementById('next-info').addEventListener('click', () => {
+            if (engineStarted) {
+                currentInfoIndex2 = (currentInfoIndex2 + 1) % infoTypes2.length;
+                updateInfoDisplay();
+            }
+        });
+
+        // Initialize canvas and gauges
+        initializeCanvas();
+        drawGauge('tachometer', 0, 8, '#f60', 'x1000rpm');
+        drawGauge('speedometer', 0, 260, '#0af', 'km/h');
+
+        // Simulating updates for gauges
+        setInterval(() => {
+            if (engineStarted) {
+                const speed = Math.random() * 260;
+                const rpm = Math.random() * 8;
+                drawGauge('speedometer', speed, 260, '#0af', 'km/h');
+                drawGauge('tachometer', rpm, 8, '#f60', 'x1000rpm');
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>
