@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "face-npu-ai"
+version = "0.1.0"
+description = "Host-side ArcFace IR-SE model and NPU porting experiments"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.23",
+    "Pillow>=9",
+    "torch>=2.0",
+]
+
+[project.optional-dependencies]
+eval = [
+    "opencv-python-headless>=4.8",
+    "scikit-learn>=1.2",
+]
+onnx = [
+    "onnx>=1.14",
+    "onnxruntime>=1.16",
+]
+test = [
+    "face-npu-ai[eval]",
+    "pytest>=7",
+]
+
+[project.scripts]
+face-npu-ai = "face_npu_ai.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
