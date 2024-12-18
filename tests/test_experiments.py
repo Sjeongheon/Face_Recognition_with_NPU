@@ -3,8 +3,8 @@ import pytest
 import torch
 from torch import nn
 
-from face_npu_ai.models.arcface import bottleneck_IR_SE
-from face_npu_ai.experiments import fold_linear_bn_to_conv, make_variant
+from face_npu_ai.models.arcface import SEModule, bottleneck_IR_SE
+from face_npu_ai.experiments import PReLUAsOps, fold_linear_bn_to_conv, make_variant
 from face_npu_ai.evaluation.agreement import compare_embeddings
 
 
@@ -37,8 +37,28 @@ def test_exact_variant_preserves_eval_output_and_baseline():
     assert expected.shape == got.shape == (2, 8)
     torch.testing.assert_close(got, expected, atol=3e-5, rtol=3e-5)
     assert isinstance(baseline.body[0].shortcut_layer, nn.MaxPool2d)
+    assert isinstance(baseline.body[0].res_layer[2], nn.PReLU)
+    assert isinstance(baseline.body[0].res_layer[-1], SEModule)
     assert isinstance(exact.body[0].shortcut_layer.op, nn.Conv2d)
-    assert {item["transformation"] for item in report} == {"pool_to_depthwise", "linear_bn_to_conv"}
+    assert isinstance(exact.body[0].res_layer[2], PReLUAsOps)
+    assert {item["transformation"] for item in report} == {
+        "pool_to_depthwise", "linear_bn_to_conv", "prelu_to_ops",
+    }
+
+
+def test_exact_prelu_preserves_nonuniform_channel_slopes():
+    prelu = nn.PReLU(4)
+    with torch.no_grad():
+        prelu.weight.copy_(torch.tensor([0.1, 0.2, 0.4, 0.8]))
+    converted = PReLUAsOps(prelu)
+    x = torch.tensor([
+        [[[-2.0, 3.0]], [[-4.0, 5.0]], [[-6.0, 7.0]], [[-8.0, 9.0]]]
+    ])
+
+    torch.testing.assert_close(converted(x), prelu(x), atol=0.0, rtol=0.0)
+    torch.testing.assert_close(
+        converted.slope.flatten(), prelu.weight.detach(), atol=0.0, rtol=0.0
+    )
 
 
 def test_fold_supports_batchnorm_without_affine():
@@ -65,6 +85,7 @@ def test_prelu_approx_is_reported_as_non_equivalent():
     assert rows[0]["slope_std"] > 0
     assert rows[0]["equivalent"] is False
     assert isinstance(variant.body[0].res_layer[2], nn.LeakyReLU)
+    assert variant.body[0].res_layer[2].negative_slope == pytest.approx(0.5)
     assert isinstance(baseline.body[0].res_layer[2], nn.PReLU)
 
 
@@ -75,10 +96,16 @@ def test_bn_workaround_preserves_fp32_and_no_se_is_ablation():
     workaround, entries = make_variant(baseline, "bn_workaround")
     x = torch.randn(2, 16, 4, 4)
     torch.testing.assert_close(workaround(x), exact(x), atol=1e-5, rtol=1e-5)
+    assert isinstance(workaround.body[0].res_layer[2], PReLUAsOps)
+    assert any(row["transformation"] == "prelu_to_ops" for row in entries)
     assert any(row["transformation"] == "identity_dwconv_before_bn" for row in entries)
     removed, entries = make_variant(baseline, "no_se")
+    assert isinstance(removed.body[0].res_layer[2], PReLUAsOps)
+    assert any(row["transformation"] == "prelu_to_ops" for row in entries)
     assert any(row["transformation"] == "remove_se" and not row["equivalent"] for row in entries)
     assert not torch.allclose(removed(x), exact(x))
+    assert isinstance(baseline.body[0].res_layer[2], nn.PReLU)
+    assert isinstance(baseline.body[0].res_layer[-1], SEModule)
 
 
 def test_agreement_requires_matching_nonzero_embeddings():

@@ -9,6 +9,7 @@ from copy import deepcopy
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from .models.arcface import SEModule, bottleneck_IR, bottleneck_IR_SE
 
@@ -35,6 +36,20 @@ class DepthwiseSubsample(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.op(x)
+
+
+class PReLUAsOps(nn.Module):
+    """Inference-only PReLU decomposition preserving learned channel slopes."""
+
+    def __init__(self, prelu: nn.PReLU):
+        super().__init__()
+        slope = prelu.weight.detach().clone().reshape(1, -1, 1, 1)
+        self.register_buffer("slope", slope)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        positive = F.relu(x)
+        negative = x - positive
+        return positive + self.slope * negative
 
 
 def _same_pair(value, expected):
@@ -121,7 +136,21 @@ def _convert_output_head(model: nn.Module, report: list[dict]) -> None:
     report.append({"transformation": "linear_bn_to_conv", "module": "output_layer", "kernel": spatial})
 
 
-def _replace_prelu(model: nn.Module, report: list[dict]) -> None:
+def _replace_prelu_exact(model: nn.Module, report: list[dict]) -> None:
+    for parent_name, parent in list(model.named_modules()):
+        for name, child in list(parent.named_children()):
+            if not isinstance(child, nn.PReLU):
+                continue
+            setattr(parent, name, PReLUAsOps(child))
+            report.append({
+                "transformation": "prelu_to_ops",
+                "module": f"{parent_name}.{name}".lstrip("."),
+                "parameters": child.weight.numel(),
+                "equivalent": True,
+            })
+
+
+def _replace_prelu_approx(model: nn.Module, report: list[dict]) -> None:
     for parent_name, parent in list(model.named_modules()):
         for name, child in list(parent.named_children()):
             if not isinstance(child, nn.PReLU):
@@ -194,10 +223,10 @@ def prelu_parameter_report(model: nn.Module) -> list[dict]:
 def make_variant(baseline: nn.Module, variant: str) -> tuple[nn.Module, list[dict]]:
     """Build one variant from the strict baseline, never stacking ablations.
 
-    exact: shortcut + output-head transformation (mathematically FP32 equivalent).
-    prelu_approx: exact + scalar PReLU approximation.
-    bn_workaround: exact + BN graph-pattern workaround; separate from PReLU.
-    no_se: exact + destructive SE ablation; not a trained replacement model.
+    exact: common graph conversions + equivalent per-channel PReLU decomposition.
+    prelu_approx: common graph conversions + mean-slope LeakyReLU approximation.
+    bn_workaround: exact semantics + BN graph-pattern workaround.
+    no_se: exact semantics + destructive SE ablation.
     """
     if variant not in VARIANTS:
         raise ValueError(f"Unknown variant {variant!r}; choose from {VARIANTS}")
@@ -210,8 +239,10 @@ def make_variant(baseline: nn.Module, variant: str) -> tuple[nn.Module, list[dic
     _replace_shortcuts(model, report)
     _convert_output_head(model, report)
     if variant == "prelu_approx":
-        _replace_prelu(model, report)
-    elif variant == "bn_workaround":
+        _replace_prelu_approx(model, report)
+    else:
+        _replace_prelu_exact(model, report)
+    if variant == "bn_workaround":
         _insert_bn_workaround(model, report)
     elif variant == "no_se":
         _remove_se(model, report)
