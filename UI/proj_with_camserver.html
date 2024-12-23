@@ -409,6 +409,7 @@
         let ws = null;
         let isCapturing = false;
         let isRecognitionMode = false;
+        let recognitionFramePending = false;
         let buildingStarted = false;
         let progressElement = document.getElementById('registrationProgress');
         function connectWebSocket() {
@@ -419,6 +420,7 @@
             };
 
             ws.onclose = () => {
+                recognitionFramePending = false;
                 console.log('WebSocket 연결이 종료되었습니다. 재연결 시도...');
                 setTimeout(connectWebSocket, 1000);
             };
@@ -430,6 +432,9 @@
             ws.onmessage = (event) => {
                 const response = JSON.parse(event.data);
                 console.log('서버 응답:', response);
+                if (['recognition_result', 'recognition_processing'].includes(response.type) || response.status === 'error') {
+                    recognitionFramePending = false;
+                }
 
                 switch (response.type) {
                     case 'start':
@@ -528,6 +533,10 @@
                 console.error("이미지 소스가 없습니다.");
                 return;
             }
+            if (isRecognitionMode && recognitionFramePending) {
+                setTimeout(sendFrames, 100);
+                return;
+            }
             const wsCanvas = document.createElement('canvas');
             wsCanvas.width = frameElement2.naturalWidth || 640;
             wsCanvas.height = frameElement2.naturalHeight || 480;
@@ -539,7 +548,10 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 // 인식 모드일 때는 'recognize' 접두어 추가
                 if (isRecognitionMode) {
-                    ws.send('recognize' + imageData);
+                    if (!recognitionFramePending) {
+                        recognitionFramePending = true;
+                        ws.send('recognize' + imageData);
+                    }
                 } else {
                     ws.send(imageData);
                 }

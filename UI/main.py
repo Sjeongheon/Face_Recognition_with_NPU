@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import base64
@@ -12,9 +12,16 @@ import subprocess
 import signal
 import sys
 import cv2
+from pathlib import Path
 
+if __package__:
+    from .enlight_smoke import EnlightSmokeService
+else:
+    from enlight_smoke import EnlightSmokeService
+
+APP_DIR = Path(__file__).resolve().parent
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
 class ConnectionManager:
@@ -24,6 +31,8 @@ class ConnectionManager:
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.image_count = 0
+        self.enlight_service = None
+        self.enlight_gallery_path = None
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -70,7 +79,13 @@ class ConnectionManager:
             return False
 
     def process_recognition(self, frame):
-        """프레임을 저장하고 recognize.py를 실행하여 얼굴 인식을 수행"""
+        """선택된 ENLIGHT 경로 또는 기존 recognize.py로 얼굴 인식을 수행."""
+        gallery_path = os.getenv("FACE_NPU_ENLIGHT_SMOKE_GALLERY")
+        if gallery_path:
+            if self.enlight_service is None or gallery_path != self.enlight_gallery_path:
+                self.enlight_service = EnlightSmokeService(gallery_path)
+                self.enlight_gallery_path = gallery_path
+            return self.enlight_service.recognize(frame)
         try:
             # 임시 이미지 파일로 저장
             temp_image_path = "./face-recognition/temp_recognition.jpg"
@@ -281,14 +296,17 @@ async def websocket_endpoint(websocket: WebSocket):
                     "message": f"처리 중 오류 발생: {str(e)}"
                 })
 
+    except WebSocketDisconnect:
+        pass
     except Exception as e:
         print(f"WebSocket 오류: {str(e)}")
+    finally:
         manager.disconnect(websocket)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
-    with open("proj.html", "r", encoding='utf-8') as f:
+    with open(APP_DIR / "proj_with_camserver.html", "r", encoding='utf-8') as f:
         return f.read()
 
 

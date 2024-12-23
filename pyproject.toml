@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 eval = [
-    "opencv-python-headless>=4.8",
+    "opencv-python-headless>=4.8,<5",
     "scikit-learn>=1.2",
 ]
 onnx = [
@@ -26,6 +26,12 @@ onnx = [
 test = [
     "face-npu-ai[eval]",
     "pytest>=7",
+]
+ui = [
+    "opencv-python-headless>=4.8,<5",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "httpx>=0.24",
 ]
 
 [project.scripts]
