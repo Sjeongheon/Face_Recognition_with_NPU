@@ -17,3 +17,5 @@ datasets/
 *.bin
 *.zip
 venv/
+docs/
+.DS_Store
